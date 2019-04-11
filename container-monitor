@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# save container's stats command:  docker stats --no-stream > output.containers
+# get name of container: docker ps | grep "<container_id>" | awk '{print $2}'
+# Maintainer: Murillo Melo <murillo.melo@sankhya.com.br>
+
+# FIXED VARS (FOR THRESHOLD)
+warn="80"
+crit="95"
+
+# logic
+get_stats=$(docker stats --no-stream > output.containers)
+
+for container in $(cat output.containers | awk '{print $1}' | grep -v -e "CONTAINER" -e "$(docker ps | grep -e "rancher-agent" | awk  '{print $1}')"); do
+
+        #get_get_container_name=$(docker ps | grep $container | rev |awk  '{print $1}' | rev)
+        get_container_name=$(docker inspect $container  | grep io.rancher.container.name | tr -d ' ' | awk -F \: '{print $2}' | tr -d '","')
+
+        # CPU Monitor
+        graph_cpu=$(cat output.containers | grep $container | awk '{print $2}' | awk -F \. '{print $1}')
+        cpu_usage=$(cat output.containers | grep $container | awk '{print $2}'| tr '.' ',')
+        get_cpu_stat=$(cat output.containers | grep $container | awk '{print $2}' | awk -F \. '{print $1}')
+
+                if [[ $get_cpu_stat -lt $warn ]]; then
+                        echo "0 CPU_$get_container_name count=$graph_cpu;$warn;$crit; Container With Low CPU Usage, $cpu_usage"
+
+                elif [[ $get_cpu_stat -ge $warn ]]; then
+                        echo "1 CPU_$get_container_name count=$graph_cpu;$warn;$crit; Container Wit Medium CPU Usage, $cpu_usage"
+
+                elif [[ $get_cpu_stat -ge $crit ]]; then
+                        echo "2 CPU_$get_container_name count=$graph_cpu;$warn;$crit; Container Wit High CPU Usage, $cpu_usage"
+                
+                else
+                        echo "3 CPU_$get_container_name count=$graph_cpu;$warn;$crit; Problems With Plugin "
+                fi
+
+        # Memory Monitor
+        get_mem_stat=$(cat output.containers | grep $container | awk '{print $6}' | grep -v / | awk -F \. '{print $1}')
+
+        graph_mem=$(cat output.containers | grep $container | awk '{print $6}' | grep -v / | awk -F \. '{print $1}')
+        mem_usage=$(cat output.containers | grep $container | awk '{print $6}' | grep -v / | tr '.' ',')
+
+
+                if [[ $get_mem_stat -lt $warn ]]; then
+                        echo "0 Memory_$get_container_name count=$graph_mem;$warn;$crit; Container Wit Low Memory Usage, $mem_usage"
+                
+                elif [[ $get_mem_stat -lt $crit ]]; then
+                        echo "1 Memory_$get_container_name count=$graph_mem;$warn;$crit; Container Wit Medium Memory Usage, $mem_usage"
+
+                elif [[ $get_mem_stat -ge $crit ]]; then
+                        echo "2 Memory_$get_container_name count=$graph_mem;$warn;$crit; Container Wit High Memory Usage, $mem_usage"
+                
+                else
+                        echo "3 Memory_$get_container_name count=$graph_mem;$warn;$crit; Problems With Plugin "
+                fi
+
+
+done
+
